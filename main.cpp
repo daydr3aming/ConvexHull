@@ -1,41 +1,55 @@
 #include <iostream>
 #include <vector>
-#include <utility>
 #include <fstream>
-#include <string>
 #include <algorithm>
-#include <cmath>
 #include <stack>
 
 using namespace std;
 
-// Function to find the orientation of three points (p, q, r)
-// Returns 0 if the points are collinear, 1 if they make a clockwise turn, and -1 if counterclockwise
-int orientation(pair<int, int> p, pair<int, int> q, pair<int, int> r) {
-    int val = (q.second - p.second) * (r.first - q.first) -
-              (q.first - p.first) * (r.second - q.second);
+// compilacion: g++ -std=c++11 main.cpp -o main
+// ejecucion: ./main.exe < in.txt o ./main.out < in.txt en ambiente linux o git bash
+// in.txt, primera linea es n puntos, seguidos de n lineas con los puntos en formato {x, y} o (x, y)
 
-    if (val == 0) return 0;  // Collinear
-    return (val > 0) ? 1 : -1;  // Clockwise or Counterclockwise
+// Actividad 4.1 Implementación Polígonos Convexos aplicando geometría computacional.
+// Rogelio Guzman Cruzado - A01639914
+// David Alejandro González Ibarra - A01633817 
+
+// Encuentra la orientacion de tres puntos (Pa, Pb, Pb) que forman un angulo
+// Regresa 0 si los puntos son colineales, 1 si hacen un giro counterclockwise, y -1 si hacen un giro clockwise.
+// Esto sirve como una forma de saber si tres puntos crean un angulo de menos de 180 grados o mas de 180 grados
+// Debido a que si se forma un giro clockwise, el angulo logicamente es mayor a 180 grados, y viscerversa
+// Funcion adaptada de GeeksForGeeks de Graham Scan example: https://www.geeksforgeeks.org/convex-hull-using-graham-scan/#:~:text=int%20orientation(Point,%7D
+// Recuperado el: 10/11/2023
+int orientation(pair<int, int> Pa, pair<int, int> Pb, pair<int, int> Pc) {
+    int val = (Pb.second - Pa.second) * (Pc.first - Pb.first) -
+              (Pb.first - Pa.first) * (Pc.second - Pb.second);
+
+    if (val == 0) return 0;  // Colineal
+    return (val > 0) ? 1 : -1;  // Clockwise o Counterclockwise
+}
+// Funcion de utilidad que regresa el cuadrado de la distancia entre dos puntos
+// Funcion adaptada de GeeksForGeeks Graham Scan example: https://www.geeksforgeeks.org/convex-hull-using-graham-scan/#:~:text=int%20distSq(Point,%7D
+// Recuperado en: 10/11/2023
+int dist(pair<int, int> Pa, pair<int, int> Pb) {
+    return (Pa.first - Pb.first) * (Pa.first - Pb.first) +
+           (Pa.second - Pb.second) * (Pa.second - Pb.second);
 }
 
-int dist(pair<int, int> p1, pair<int, int> p2) {
-    return (p1.first - p2.first) * (p1.first - p2.first) +
-           (p1.second - p2.second) * (p1.second - p2.second);
-}
-
-// Comparator function to sort points based on polar angle
+// Sorteamos los puntos de acuerdo a la magnitud del angulo que forman con el punto P
 bool polarOrder(pair<int, int> p, pair<int, int> q, const vector<pair<int, int>>& points) {
+    // points[0] == P
     int orientation_val = orientation(points[0], p, q);
     if (orientation_val == 0) {
-        // If two points make the same angle with the pivot (interior point),
-        // choose the one that is closer to the pivot
+        // Si dos puntos tienen el mismo angulo, borramos el punto con menor magnitud
         return (dist(points[0], p) < dist(points[0], q));
     }
     return (orientation_val == -1);
 }
 
-
+// Funcion de utilidad para obtener el siguiente en el stack
+// Propositos de codigo limpio
+// Funcion adaptada de GeeksForGeeks Graham Scan example: https://www.geeksforgeeks.org/convex-hull-using-graham-scan/#:~:text=Point%20nextToTop(stack,%7D
+// Recuperado en: 10/11/2023
 pair<int, int> nextToTop(stack<pair<int, int>>& S) {
     pair<int, int> top = S.top();
     S.pop();
@@ -44,48 +58,51 @@ pair<int, int> nextToTop(stack<pair<int, int>>& S) {
     return next_top;
 }
 
-void GrahamScan(vector<pair<int, int>> points){
-    // Find a point, P, interior to the convex hull (CH) by taking the
-    // average of the coordinates of all the given points.
+// Algoritmo Graham Scan. Complejidad Temporal: O(nlogn)
+stack<pair<int, int>> GrahamScan(vector<pair<int, int>> points){
+
+    // Numero de puntos
     int n = points.size();
-    if (n < 3) return;
+    // Para hacer un convex hull necesitamos al menos 3 puntos
+    if (n < 3) {
+        throw invalid_argument("Se necesitan al menos 3 puntos para hacer un convex hull");
+        return stack<pair<int, int>>();
+    }
+    // Encontramos P encontrando ymin
     int ymin = points[0].second, min = 0;
     for (int i = 1; i < n; i++){
         int y = points[i].second;
-        // Pick the bottom-most or choose the left
-        // most point in case of tie
         if ((y < ymin) || (ymin == y &&
             points[i].first < points[min].first))
         ymin = points[i].second, min = i;
     }
-    // Translate the interior point, P, and all the others, so the interior point is at the origin.
+    // Hacemos que P sea el punto origen
     swap(points[0], points[min]);
+
+    // Sorteamos los puntos dependiendo de su magnitud de angulo con P
     sort(points.begin() + 1, points.end(), [&points](const pair<int, int>& a, const pair<int, int>& b) {
         return polarOrder(a, b, points);
     });
 
-    // Initialize the stack with the pivot and the first two sorted points
+    // Iniciamos el convex hull con P y los primeros 2 puntos, ya que sabemos que siempre forman parte del convex hull
     stack<pair<int, int>> hull;
     hull.push(points[0]);
     hull.push(points[1]);
     hull.push(points[2]);
 
-    // Iterate through the sorted points to build the convex hull
+    // Eliminamos los puntos que crean un angulo mayor a 180 grados, ya que no forman parte del convex hull
     for (int i = 3; i < n; i++) {
         while (orientation(nextToTop(hull), hull.top(), points[i]) != -1)
             hull.pop();
         hull.push(points[i]);
     }
-
-    // Output the convex hull points
-    while (!hull.empty()) {
-        pair<int, int> p = hull.top();
-        cout << "(" << p.first << ", " << p.second << ")" << endl;
-        hull.pop();
-    }
+    return hull;
 }
 
+// Codigo driver
 int main() {
+
+    // Input test recuperado de: https://www.geeksforgeeks.org/convex-hull-using-graham-scan/#:~:text=input_points%20%3D%20%5B(,%2C%203)%5D
     int n;
     cin >> n;
     vector<pair<int, int>> points(n);
@@ -95,10 +112,14 @@ int main() {
         cin >> c >> x >> c >> y >> c;
         points[i] = make_pair(x, y);
     }
-    for (auto p : points) {
-        cout << p.first << " " << p.second << endl;
+    
+    // Imprimimos los puntos que forman parte del convex hull en orden counterclockwise
+    stack<pair<int, int>> convexHull= GrahamScan(points);
+    while (!convexHull.empty()) {
+        pair<int, int> p = convexHull.top();
+        cout << "(" << p.first << ", " << p.second << ")" << endl;
+        convexHull.pop();
     }
-    GrahamScan(points);
     return 0;
 }
 
